@@ -154,7 +154,9 @@ class SurvivalDataset(Dataset):
 
 # Training loop
 def train_model(model, train_loader, test_loader, num_epochs, learning_rate, device, save_model_dir, save_period = 0):
-    
+    if not os.path.exists(save_model_dir):
+        os.makedirs(save_model_dir) 
+    save_model_dir = os.path.join(save_model_dir, "epoch_")
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     model.train()
 
@@ -167,8 +169,10 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
             events = events.to(device)
 
             # Forward pass
-            hazard_preds = model(images, survival_times, events)
-
+            if model.__class__.__name__ == "ResNet":
+                hazard_preds = model(images)
+            else:
+                hazard_preds = model(images, survival_times, events)
             # Compute loss
             loss = negative_log_likelihood(hazard_preds, survival_times, events)
 
@@ -197,9 +201,10 @@ def test_model(model, test_loader, device):
         images = images.to(device)
         survival_times = survival_times.to(device)
         events = events.to(device)
-
-        hazard_preds = model(images, survival_times, events)
-        
+        if model.__class__.__name__ == "ResNet":
+            hazard_preds = model(images)
+        else:
+            hazard_preds = model(images, survival_times, events) 
         for index in range(len(hazard_preds)):
             hazard_pred = hazard_preds[index].tolist()
             survival_time = survival_times[index].tolist()
@@ -258,12 +263,14 @@ def save_results(train_accuracy, vaild_accuracy, file_path="metrics2.xlsx"):
 
 
 def main():
-    os.chdir(r'C:\Users\billy\Desktop\NYU\VIP\TILScore')
-    image_dir = r'C:\Users\billy\Desktop\NYU\VIP\TILScore\images'
-    data_filepath = r'C:\Users\billy\Desktop\NYU\VIP\TILScore\clinical.csv'
-    annotations_path = r'C:\Users\billy\Desktop\NYU\VIP\TILScore\annotations.csv'
-    save_model_dir = r'C:\Users\billy\Desktop\NYU\VIP\TILScore\epoch '
-    test_image_path = r'C:\Users\billy\Desktop\NYU\VIP\TILScore\images\TCGA-2J-AAB1-01Z-00-DX1.png'
+    # Now use the relative path
+    Base_dir= os.path.dirname(os.path.abspath(__file__))
+    os.chdir(Base_dir)
+    image_dir = os.path.join(Base_dir, 'images')
+    data_filepath = Base_dir+r'\clinical.csv'
+    annotations_path = Base_dir+r'\annotations.csv'
+    save_model_dir = os.path.join(Base_dir, 'epochs')
+    test_image_path =Base_dir+r'\images\TCGA-2J-AAB1-01Z-00-DX1.png'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
     data = get_data(annotations_path)
@@ -285,11 +292,11 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
-
-    train_dataset = SurvivalDataset(data[0][:168], data[1][:168], data[2][:168], transformations)
+    modified_list = [os.path.join(image_dir, os.path.basename(path)) for path in data[0]]
+    train_dataset = SurvivalDataset(modified_list[:168], data[1][:168], data[2][:168], transformations)
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
-    validation_dataset = SurvivalDataset(data[0][169:], data[1][169:], data[2][169:], transformations)
+    validation_dataset = SurvivalDataset(modified_list[169:], data[1][169:], data[2][169:], transformations)
     validation_loader = DataLoader(validation_dataset, batch_size=16, shuffle=True)
 
     print(f"Images in train dataset: {len(train_loader.dataset)}")
