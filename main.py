@@ -174,8 +174,10 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
             else:
                 hazard_preds = model(images, survival_times, events)
             # Compute loss
-            loss = negative_log_likelihood(hazard_preds, survival_times, events)
-
+            if model.__class__.__name__ == "ResNet":
+                loss = F.cross_entropy(hazard_preds, survival_times)
+            else:
+                loss = negative_log_likelihood(hazard_preds, survival_times, events)
             # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
